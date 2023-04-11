@@ -4,7 +4,7 @@ import sys
 #PyQt5中使用的基本控件都在PyQt5.QtWidgets模块中
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, qApp
 #导入designer工具生成的login模块
-from myUI3 import Ui_Dialog
+from myUI import Ui_Dialog
 from PyQt5 import QtCore, QtGui, QtWidgets
 #导入串口模块
 import serial
@@ -37,15 +37,21 @@ class MyMainForm(QMainWindow, Ui_Dialog):
         self.setData()
 
         #获取串口
-        self.portList: list
+        self.portList: list[serial.Serial]
         self.ui.pushButton.clicked.connect(self.getSerial)
         self.ifInitable: bool = False #默认未获取串口
         self.ifReady: bool = False #默认串口未初始化
         self.port: serial.Serial #选择的串口对象
+        #获取串口后更改串口，需要关闭原串口并更新串口信息
+        self.ui.comboBox.currentTextChanged.connect(self.changePort)
+        #串口初始化
         self.ui.pushButton_2.clicked.connect(self.initSerial)
         #发送数据
         self.dataToSend:str  #要发送的字符串
-        self.ui.pushButton_3.clicked.connect(self.sendData)
+        #三种发送格式
+        self.ui.pushButton_4.clicked.connect(lambda: self.sendData(1))
+        self.ui.pushButton_3.clicked.connect(lambda: self.sendData(2))
+        self.ui.pushButton_5.clicked.connect(lambda: self.sendData(3))
 
         #文字框改变拖动条，我这里这个顺序太难受了hhh
         self.ui.lineEdit.textChanged.connect(lambda: self.drag(0))
@@ -81,8 +87,27 @@ class MyMainForm(QMainWindow, Ui_Dialog):
         else:
             self.ifInitable = True
             for port in self.portList:
-                print(port)
+                #print(port)
                 self.ui.comboBox.addItem(port.device)
+
+    #切换串口，修改显示的串口信息
+    def changePort(self)->None:
+        try:
+            if(self.ifReady==True):#已经初始化过了，先关闭串口
+                self.port.close()
+                self.ifReady = False
+            #desc:str
+            self.portList = serial.tools.list_ports.comports()
+            for i in self.portList:
+                if( i.device == self.ui.comboBox.currentText()):
+                    self.ui.label_22.setText(str(i)+" | 未初始化")
+                    self.changeState(0)#同时也要初始化数据发送状态
+                    break
+        except Exception as e:
+            QMessageBox.critical(self, "错误",
+                         "<font color=\"#FFFFFF\">串口切换失败！Error:"+str(e)+"</font>",
+                        QMessageBox.Ok, 
+                        QMessageBox.Ok)
 
     #初始化当前串口
     def initSerial(self)->None:
@@ -104,6 +129,8 @@ class MyMainForm(QMainWindow, Ui_Dialog):
                                 "<font color=\"#FFFFFF\">串口初始化成功！</font>",
                                 QMessageBox.Ok, 
                                 QMessageBox.Ok)
+                    desc:list[str] = self.ui.label_22.text().split(' | ')
+                    self.ui.label_22.setText(desc[0]+" | 已初始化")
 
             except Exception as e:
                 self.ifReady = False
@@ -114,8 +141,9 @@ class MyMainForm(QMainWindow, Ui_Dialog):
                 if(result2 == QMessageBox.Retry):
                     self.initSerial()#重试
 
+
     #发送数据
-    def sendData(self)->None:
+    def sendData(self, type:int)->None:
         if(self.ifReady == False):
             result1 = QMessageBox.warning(self, "提示",
                                             "<font color=\"#FFFFFF\">串口还未初始化！</font>",
@@ -124,38 +152,51 @@ class MyMainForm(QMainWindow, Ui_Dialog):
             if(result1 == QMessageBox.Retry):
                 self.initSerial()#进入初始化
         else:
-            totalTime: int = self.totalTime #周期总时间
-            if(totalTime == 0):
-                QMessageBox.warning(self, "提示",
-                                "<font color=\"#FFFFFF\">总时间不能为0！</font>",
-                                QMessageBox.Ok,
-                                QMessageBox.Ok)
-            freq: int = int(1000000/totalTime)#频率
-            highProportion: int = int(self.param[0]/totalTime * 1000)#high占空比
-            lowProportion: int = int(self.param[1]/totalTime * 1000)#low占空比
-            firstBlank: int = int (self.param[2]/totalTime * 1000)#第一段空白
-            secondBlank: int = int (self.param[3]/totalTime * 1000)#第二段空白
-            self.dataToSend = str(str(self.param[6]) + "@" + #载波频率
-                                 str(freq) + "@" + #调制波频率
-                                 str(self.param[4]) + "@" + #正range
-                                 str(self.param[5]) + "@" + #负range
-                                 str(highProportion) + "@" + #high占空比
-                                 str(lowProportion) + "@" + #low占空比
-                                 str(firstBlank) + "@" + #第一段空白
-                                 str(secondBlank) + #第二段空白
-                                 "\r\n")#.encode("utf-8")
-            #print(self.dataToSend)
+            if(type==3):#暂停
+                self.dataToSend = "1@1@1@0@0@500@500@0@0"+"\r\n"
+            else:
+                totalTime: int = self.totalTime #周期总时间
+                if(totalTime == 0):
+                    QMessageBox.warning(self, "提示",
+                                    "<font color=\"#FFFFFF\">总时间不能为0！</font>",
+                                    QMessageBox.Ok,
+                                    QMessageBox.Ok)
+                freq: int = int(1000000/totalTime)#频率
+                highProportion: int = int(self.param[0]/totalTime * 1000)#high占空比
+                lowProportion: int = int(self.param[1]/totalTime * 1000)#low占空比
+                firstBlank: int = int (self.param[2]/totalTime * 1000)#第一段空白
+                secondBlank: int = int (self.param[3]/totalTime * 1000)#第二段空白
+                self.dataToSend = str(str(self.param[6]) + "@" + #载波频率
+                                    str(freq) + "@" + #调制波频率
+                                    str(self.param[4]) + "@" + #正range
+                                    str(self.param[5]) + "@" + #负range
+                                    str(highProportion) + "@" + #high占空比
+                                    str(lowProportion) + "@" + #low占空比
+                                    str(firstBlank) + "@" + #第一段空白
+                                    str(secondBlank) + #第二段空白
+                                    "\r\n")#.encode("utf-8")
+                #print(self.dataToSend)
+                if(type == 1):#循环发送
+                    self.dataToSend = "0@"+self.dataToSend
+                elif(type == 2):#单次发送
+                    self.dataToSend = "2@"+self.dataToSend
             try:
-                result3 = QMessageBox.information(self, "确认",
+                if(type==3):#暂停，不需要确认数据
+                    #print(1)
+                    self.port.write(self.dataToSend.encode("utf-8"))
+                    self.changeState(type)
+                else:#发送数据，需要确认
+                    result3 = QMessageBox.information(self, "确认",
                                 "<font color=\"#FFFFFF\">请确认您要发送的数据："+"\r\n"+self.dataToSend+"</font>",
                                 QMessageBox.Ok|QMessageBox.Cancel, 
                                 QMessageBox.Ok)
-                if(result3==QMessageBox.Ok):
-                    self.port.write(self.dataToSend.encode("utf-8"))
-                    QMessageBox.information(self, "提示",
-                                "<font color=\"#FFFFFF\">数据发送成功！</font>",
-                                QMessageBox.Ok, 
-                                QMessageBox.Ok)
+                    if(result3==QMessageBox.Ok):
+                        self.port.write(self.dataToSend.encode("utf-8"))
+                        QMessageBox.information(self, "提示",
+                                    "<font color=\"#FFFFFF\">数据发送成功！</font>",
+                                    QMessageBox.Ok, 
+                                    QMessageBox.Ok)
+                        self.changeState(type)
             except Exception as e:
                 result2 = QMessageBox.critical(self, "错误",
                                             "<font color=\"#FFFFFF\">数据发送失败! Error:"+str(e)+"</font>",
@@ -163,38 +204,88 @@ class MyMainForm(QMainWindow, Ui_Dialog):
                                             QMessageBox.Cancel)#返回值是按下的按钮
                 if(result2 == QMessageBox.Retry):
                     self.sendData()#重试
-                
+              
+    #更新数据发送状态
+    def changeState(self, type:int)->None:
+        if(type==1):#循环
+            self.ui.label_24.setText("循环发送"+"--"+self.dataToSend[0:-2])
+        elif(type==2):#单次
+            self.ui.label_24.setText("单次发送"+"--"+self.dataToSend[0:-2])
+        elif(type==3):#暂停
+            self.ui.label_24.setText("已暂停")
+        elif(type==0):#换了一个串口，还未发送数据
+            self.ui.label_24.setText("未发送数据")
+        #不知道如何进行label与文字大小的自适应
+        #self.ui.label_24.resize(self.ui.label_24.text().__len__*10)
+        #self.ui.label_15.adjustSize()
+        return
+
+    #画图用特殊log函数
+    def log(self, x)->float:
+        if(x==0):
+            return 0
+        elif(x==1):
+            return 1
+        else:
+            return math.log(x)*2
+        
     #画图
     def drawGraph(self)->None:
         if(self.totalTime == 0):
             self.line_green.setData([-200, 400], [0, 0])#初始图像
         else:
-            #取对数，减少空白和刺激时间的差异
-            log = lambda x: 0 if x==0 else int(math.log(x)*2)
-            high = lambda x: 0 if highTime==0 else x
-            low = lambda x: 0 if lowTime==0 else x
-            highTime:int = log(self.param[0])
-            lowTime:int = log(self.param[1])
-            blank1:int = log(self.param[2])
-            blank2:int = log(self.param[3])
+            high:int = lambda x: 0 if highTime==0 else x
+            low:int = lambda x: 0 if lowTime==0 else x
+            ratio:float#两段刺激时间的比例
+            highTime:int
+            lowTime:int
+            if(self.param[1] > self.param[0]):
+                if(self.param[0]>0):
+                    ratio = self.param[1]/self.param[0]
+                    highTime = self.log(self.param[0])
+                    lowTime = int(highTime * ratio)
+                else:
+                    highTime = 0
+                    lowTime = self.log(self.param[1])
+            else:
+                if(self.param[1]>0):
+                    ratio = self.param[0]/self.param[1]
+                    lowTime = self.log(self.param[1])
+                    highTime = int(lowTime * ratio)
+                else:
+                    lowTime = 0
+                    highTime = self.log(self.param[0])
+
+            # highTime = log(self.param[0])
+            # lowTime = log(self.param[1])
+            blank1:int = self.log(self.param[2])
+            blank2:int = self.log(self.param[3])
             highRange:int = self.param[4]
             lowRange:int = self.param[5]
             totalTime = highTime+lowTime+blank1+blank2
 
             #坐标描点
-            Xlist:list[int] = [-200]
+            Xlist:list[int] = [-2000]
             Ylist:list[int] = [0]
-            tail: int = -100 #上一个波形的末尾，需要接上下一个波形
+            tail: int = -2000 #上一个波形的末尾，需要接上下一个波形
             tmpY:list[int] = [0, high(highRange), high(highRange), 0, 0, -low(lowRange), -low(lowRange), 0, 0] 
-            tmpX:list[int] = []    
-            for i in range(math.ceil(300/totalTime)):
-                tmpX = [tail, tail+1, tail+highTime+1, tail+highTime+2, tail+highTime+blank1+2, tail+highTime+blank1+3,
-                        tail+totalTime-blank2+3, tail+totalTime-blank2+4, 
-                        tail+totalTime+4]
-                tail = tail + totalTime+4   #稍斜一点，纯为了效果
-                Xlist.extend(tmpX)
-                Ylist.extend(tmpY) #将新波形加在原来波形的后面
-            Xlist.append(400)
+            tmpX:list[int] = []
+            if(totalTime!=0):    
+                for i in range(math.ceil(4000/totalTime)):
+                    tmpX = [tail, tail+1, tail+highTime+1, tail+highTime+2, tail+highTime+blank1+2, tail+highTime+blank1+3,
+                            tail+totalTime-blank2+3, tail+totalTime-blank2+4, 
+                            tail+totalTime+4]
+                    tail = tail + totalTime+4   #稍斜一点，纯为了效果
+                    Xlist.extend(tmpX)
+                    Ylist.extend(tmpY) #将新波形加在原来波形的后面
+                #灵活调整坐标轴
+                if(totalTime > 100):
+                    self.ui.graphicsView.setXRange(0, totalTime+100)
+                elif(totalTime < 10):
+                    self.ui.graphicsView.setXRange(0, 20)
+                else:
+                    self.ui.graphicsView.setXRange(0, 100)
+            Xlist.append(tail+500)
             Ylist.append(0)
             self.line_green.setData(Xlist, Ylist)
 

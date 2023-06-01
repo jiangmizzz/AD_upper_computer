@@ -48,10 +48,11 @@ class MyMainForm(QMainWindow, Ui_Dialog):
         self.ui.pushButton_2.clicked.connect(self.initSerial)
         #发送数据
         self.dataToSend:str  #要发送的字符串
-        #三种发送格式
+        #modified: 四种发送格式，增加了‘既定刺激流程’按钮（0）
         self.ui.pushButton_4.clicked.connect(lambda: self.sendData(1))
         self.ui.pushButton_3.clicked.connect(lambda: self.sendData(2))
         self.ui.pushButton_5.clicked.connect(lambda: self.sendData(3))
+        self.ui.pushButton_6.clicked.connect(lambda: self.sendData(4))
 
         #文字框改变拖动条，我这里这个顺序太难受了hhh
         self.ui.lineEdit.textChanged.connect(lambda: self.drag(0))
@@ -153,7 +154,9 @@ class MyMainForm(QMainWindow, Ui_Dialog):
                 self.initSerial()#进入初始化
         else:
             if(type==3):#暂停
-                self.dataToSend = "1@1@1@0@0@500@500@0@0"+"\r\n"
+                self.dataToSend = "2@1@1@0@0@500@500@0@0"+"\r\n"
+            elif(type==4):#既定刺激流程
+                self.dataToSend = "0"+"\r\n"
             else:
                 totalTime: int = self.totalTime #周期总时间
                 if(totalTime == 0):
@@ -177,9 +180,9 @@ class MyMainForm(QMainWindow, Ui_Dialog):
                                     "\r\n")#.encode("utf-8")
                 #print(self.dataToSend)
                 if(type == 1):#循环发送
-                    self.dataToSend = "0@"+self.dataToSend
+                    self.dataToSend = "1@"+self.dataToSend
                 elif(type == 2):#单次发送
-                    self.dataToSend = "2@"+self.dataToSend
+                    self.dataToSend = "3@"+self.dataToSend
             try:
                 if(type==3):#暂停，不需要确认数据
                     #print(1)
@@ -206,13 +209,16 @@ class MyMainForm(QMainWindow, Ui_Dialog):
                     self.sendData()#重试
               
     #更新数据发送状态
+    #add: type 4--既定刺激流程
     def changeState(self, type:int)->None:
         if(type==1):#循环
-            self.ui.label_24.setText("循环发送"+"--"+self.dataToSend[0:-2])
+            self.ui.label_24.setText("循环发送"+"--"+self.dataToSend[0:-2])#去除换行
         elif(type==2):#单次
             self.ui.label_24.setText("单次发送"+"--"+self.dataToSend[0:-2])
         elif(type==3):#暂停
             self.ui.label_24.setText("已暂停")
+        elif(type==4):
+            self.ui.label_24.setText("既定刺激流程")
         elif(type==0):#换了一个串口，还未发送数据
             self.ui.label_24.setText("未发送数据")
         #不知道如何进行label与文字大小的自适应

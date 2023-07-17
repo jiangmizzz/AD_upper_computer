@@ -16,3 +16,6 @@ pip install -r requirement.txt
 
 ### run code
 在`myMain.py`文件的代码区右键并选择`run code`，即可运行代码。
+
+### 生成可执行文件
+安装pyinstaller后在终端输入`Pyinstaller -F -w myMain.py -n Upper_Computer`即可在dist目录下生成`Upper_Computer.exe`，同理可以取其他名字。
